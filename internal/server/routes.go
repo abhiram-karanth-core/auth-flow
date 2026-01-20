@@ -8,7 +8,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/markbates/goth/gothic"
-)
+)	
 
 func (s *Server) RegisterRoutes() http.Handler {
 	r := chi.NewRouter()

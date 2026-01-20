@@ -2,6 +2,7 @@ package main
 
 import (
 	"authflow/internal/auth"
+	"log"
 	"net/http"
 	"os"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/markbates/goth"
 	"github.com/markbates/goth/gothic"
 	"github.com/markbates/goth/providers/google"
+	"authflow/internal/server"
 )
 
 func main() {
@@ -27,5 +29,13 @@ func main() {
 			"http://localhost:8080/auth/google/callback",
 		),
 	)
+	srv := server.NewServer() 
+	handler := srv.RegisterRoutes()
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
 
+	log.Println("Listening on port", port)
+	log.Fatal(http.ListenAndServe(":"+port, handler))
 }
