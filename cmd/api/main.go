@@ -26,7 +26,7 @@ func main() {
 		google.New(
 			googleClientId,
 			googleClientSecret,
-			"http://localhost:8080/auth/google/callback",
+			"https://authflow-go.onrender.com/auth/google/callback",
 		),
 	)
 	srv := server.NewServer() 
