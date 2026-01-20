@@ -8,7 +8,8 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/markbates/goth/gothic"
-)	
+	"authflow/internal/auth"
+)
 
 func (s *Server) RegisterRoutes() http.Handler {
 	r := chi.NewRouter()
@@ -47,6 +48,22 @@ func (s *Server) authCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// You now have OAuth user info
-	fmt.Fprintf(w, "Logged in as: %s (%s)", user.Name, user.Email)
+
+	token, err := auth.GenerateJWT(user.Email)
+	if err != nil {
+		http.Error(w, "Token generation failed", http.StatusInternalServerError)
+		return
+	}
+
+	// hardcoded frontend url as of now
+	frontendURL := "https://ragworks-wheat.vercel.app/"
+
+	redirectURL := fmt.Sprintf(
+		"%s/oauth/callback?token=%s&username=%s",
+		frontendURL,
+		token,
+		user.Email,
+	)
+
+	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 }
