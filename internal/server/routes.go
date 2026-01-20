@@ -3,12 +3,14 @@ package server
 import (
 	"fmt"
 	"net/http"
+	"os"
+
+	"authflow/internal/auth"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/markbates/goth/gothic"
-	"authflow/internal/auth"
 )
 
 func (s *Server) RegisterRoutes() http.Handler {
@@ -48,7 +50,6 @@ func (s *Server) authCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-
 	token, err := auth.GenerateJWT(user.Email)
 	if err != nil {
 		http.Error(w, "Token generation failed", http.StatusInternalServerError)
@@ -56,7 +57,7 @@ func (s *Server) authCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// hardcoded frontend url as of now
-	frontendURL := "https://ragworks-wheat.vercel.app/"
+	frontendURL := os.Getenv("FRONTEND_URL")
 
 	redirectURL := fmt.Sprintf(
 		"%s/oauth/callback?token=%s&username=%s",
