@@ -29,7 +29,7 @@ func NewAuth() *sessions.CookieStore {
 		MaxAge:   MaxAge,
 		HttpOnly: true,
 		Secure:   isProd,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: http.SameSiteNoneMode,
 	}
 	return store
 }
