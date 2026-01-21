@@ -23,16 +23,6 @@ Authflow-Go functions as:
 
 ---
 
-## 🚫 What This Project Is NOT
-
-- ❌ Not a complete OAuth 2.0 / OpenID Connect provider
-- ❌ Does not issue authorization codes to third-party clients
-- ❌ Does not manage users in a database (yet)
-
-Instead, it focuses on **simple, secure auth flows** for modern backend systems.
-
----
-
 ## Features
 
 - Google OAuth 2.0 authentication (via Goth)
