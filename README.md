@@ -99,4 +99,4 @@ After successful OAuth validation, AuthFlow issues an application-scoped JWT and
 
 ## Authentication Flow
 
-![AuthFlow OAuth Flow](result/flowchart-oauth.svg)
+![AuthFlow OAuth Flow](result/oauth-flowchart.svg)
