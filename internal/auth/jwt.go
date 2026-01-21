@@ -22,7 +22,7 @@ func GenerateJWT(email, providerUserID string) (string, error) {
         Email:    email,
         Provider: "google",
         RegisteredClaims: jwt.RegisteredClaims{
-            Subject:   providerUserID, // ✅ REQUIRED
+            Subject:   providerUserID, 
             ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
             IssuedAt:  jwt.NewNumericDate(time.Now()),
             Issuer:    "authflow-go",

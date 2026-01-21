@@ -44,27 +44,25 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) authCallback(w http.ResponseWriter, r *http.Request) {
-	user, err := gothic.CompleteUserAuth(w, r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
-		return
-	}
+    user, err := gothic.CompleteUserAuth(w, r)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusUnauthorized)
+        return
+    }
 
-	token, err := auth.GenerateJWT(user.Email)
-	if err != nil {
-		http.Error(w, "Token generation failed", http.StatusInternalServerError)
-		return
-	}
+    token, err := auth.GenerateJWT(user.Email, user.UserID)
+    if err != nil {
+        http.Error(w, "Token generation failed", http.StatusInternalServerError)
+        return
+    }
 
-	// hardcoded frontend url as of now
-	frontendURL := os.Getenv("FRONTEND_URL")
+    frontendURL := os.Getenv("FRONTEND_URL")
 
-	redirectURL := fmt.Sprintf(
-		"%s/oauth/callback?token=%s&username=%s",
-		frontendURL,
-		token,
-		user.Email,
-	)
+    redirectURL := fmt.Sprintf(
+        "%s/oauth/callback?token=%s",
+        frontendURL,
+        token,
+    )
 
-	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
+    http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 }
