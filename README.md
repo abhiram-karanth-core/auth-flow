@@ -66,3 +66,37 @@ Tokens issued by Authflow-Go contain:
 - `exp` – expiration time (24 hours)
 
 ---
+
+## Note
+OAuth callback validation relies on provider-issued authorization
+codes and session cookies established during browser-based authentication.
+As such, callback verification is demonstrated via browser network traces
+rather than Postman.
+
+1️ OAuth Initiation (Postman)
+<img src="result/token.png" alt="OAuth Redirect to Google" width="800"/>
+
+Caption:
+AuthFlow initiates OAuth 2.0 authentication by redirecting the client to Google’s authorization endpoint, establishing a secure session for callback validation.
+
+2️ Google Authentication & Consent
+<img src="result/choose-account.png" alt="Google Account Selection" width="800"/>
+
+Caption:
+User authentication and consent are handled by Google, which acts as the external identity provider.
+
+3️ OAuth Callback Handling (Authorization Code Exchange)
+<img src="result/callback-state.png" alt="OAuth Callback Handling" width="800"/>
+
+Caption:
+Google redirects back to AuthFlow’s callback endpoint, where the authorization code and state are validated and exchanged for provider credentials.
+
+4️ Application JWT Issuance
+<img src="result/callback-token.png" alt="JWT Issuance via Callback" width="800"/>
+
+Caption:
+After successful OAuth validation, AuthFlow issues an application-scoped JWT and securely redirects it to the client application along with the mapped user identity.
+
+## Authentication Flow
+
+![AuthFlow OAuth Flow](result/flowchart-oauth.svg)
