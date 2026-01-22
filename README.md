@@ -68,7 +68,7 @@ Tokens issued by Authflow-Go contain:
 ### 1️⃣ OAuth Initiation (Postman)
 
 <p align="center">
-  <img src="result/token.png" alt="OAuth Redirect to Google" width="800"/>
+  <img src="result/postman.png" alt="OAuth Redirect to Google" width="800"/>
 </p>
 
 <p align="center">
