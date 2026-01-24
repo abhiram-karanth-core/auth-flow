@@ -28,7 +28,7 @@ func (s *Server) RegisterRoutes() http.Handler {
 	}))
 	r.Get("/auth/{provider}", s.beginAuth)
 	r.Get("/auth/{provider}/callback", s.authCallback)
-	r.Get("/logout/{provider}", s.logout)
+	r.Post("/logout/{provider}", s.logout)
 	// protected routes
 	r.Group(func(pr chi.Router) {
 		pr.Use(authmw.JWTAuth(s.rdb)) // 👈 HERE
