@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -31,11 +32,12 @@ func (s *Server) RegisterRoutes() http.Handler {
 	r.Post("/logout/{provider}", s.logout)
 	// protected routes
 	r.Group(func(pr chi.Router) {
-		pr.Use(authmw.JWTAuth(s.rdb)) // 👈 HERE
+		pr.Use(authmw.JWTAuth(s.rdb)) 
 
 		pr.Post("/logout", s.logout)
 
 	})
+	r.Post("/mint",s.Mint)
 	return r
 }
 func (s *Server) beginAuth(w http.ResponseWriter, r *http.Request) {
@@ -105,3 +107,37 @@ func (s *Server) authCallback(w http.ResponseWriter, r *http.Request) {
 
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 }
+
+type MintRequest struct {
+	Sub      string                 `json:"sub"`
+	Provider string                 `json:"provider"`
+	Email    string                 `json:"email,omitempty"`
+	Claims   map[string]interface{} `json:"claims,omitempty"`
+}
+
+func (s *Server) Mint(w http.ResponseWriter, r *http.Request) {
+	var req MintRequest
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+
+	if req.Sub == "" {
+		http.Error(w, "missing sub", http.StatusBadRequest)
+		return
+	}
+
+	token, err := auth.GenerateJWT(req.Sub, req.Provider)
+	if err != nil {
+		http.Error(w, "token generation failed", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"access_token": token,
+	})
+}
+
+
