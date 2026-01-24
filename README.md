@@ -1,9 +1,9 @@
 # Authflow-Go
 
-Authflow-Go is a lightweight **authentication and authorization service** written in Go.  
-It handles **user authentication via OAuth providers** (Google) and **issues signed JWTs** that can be used by downstream services for authorization.
+**Authflow-Go** is a centralized authorization service written in Go.  
+It issues application-level JWTs, integrates with OAuth providers for identity verification, and enforces secure logout using Redis-backed token revocation.
 
-This project is designed to act as a **central auth service** in a microservice or API-based architecture.
+The service is designed to be used by platforms that manage how users authenticate (OAuth, username/password, SSO, etc.) while delegating authorization, token lifecycle, and revocation to a single trusted service.
 
 ---
 
@@ -11,37 +11,111 @@ This project is designed to act as a **central auth service** in a microservice 
 
 Authflow-Go functions as:
 
- **Authentication Server**  
-- Handles OAuth login (Google)
-- Manages secure user sessions
-
- **Authorization Token Issuer**  
+### Authorization Service (Primary Role)
 - Issues signed JWT access tokens
-- Tokens can be consumed by other services for authorization
+- Enforces token revocation using Redis
+- Acts as the single JWT authority for the system
 
-➡️ In practice, this makes Authflow-Go an **Authorization Server for your system**, though it is **not a full OAuth 2.0 Authorization Server implementation** (like Keycloak or Auth0).
+### Authentication Integrator (Secondary Role)
+- Supports OAuth 2.0 login (Google) for identity verification
+- Establishes secure browser sessions during OAuth flows
+
+
+
+---
+
+## Key Design Principle
+
+**Authentication and authorization are intentionally decoupled.**
+
+- **Platforms** decide how users authenticate
+- **Authflow-Go** decides how access is granted and revoked
+
+This enables:
+- A single JWT issuer
+- Consistent logout semantics
+- Stateless downstream services
+- Centralized security guarantees
 
 ---
 
 ## Features
 
-- Google OAuth 2.0 authentication (via Goth)
-- Secure cookie-based session management
-- JWT access token generation (HS256)
-- Environment-aware security settings
-- Clean Go project structure
-- Ready for microservice integration
+ -> Centralized JWT issuance (`/mint`)  
+ -> OAuth 2.0 authentication (Google via Goth)  
+ -> Redis-backed JWT revocation (secure logout)  
+ -> Stateless JWT validation middleware  
+ -> Provider-agnostic token design  
+ -> Clean Go project structure  
+ -> Microservice-friendly architecture
 
 ---
 
+## Core Endpoints
+```
+GET  /auth/{provider}
+GET  /auth/{provider}/callback
 
-## Authentication Flow
+POST /mint
+POST /logout
+```
 
-1. User initiates OAuth login
-2. Google authenticates the user
-3. Authflow-Go creates a secure session
-4. A JWT access token is generated
-5. Client uses JWT to access protected APIs
+---
+
+## Token Issuance (`/mint`)
+
+Authflow-Go exposes a token minting endpoint that issues JWTs **after authentication has already occurred**.
+
+### Request
+```http
+POST /mint
+Content-Type: application/json
+
+{
+  "sub": "username",
+  "provider": "google | local | sso",
+  "email": "user@example.com"   // optional
+}
+```
+
+### Response
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIs..."
+}
+```
+
+### ⚠️ Important Notes
+- `/mint` **does not authenticate users**
+- It assumes the caller has already verified identity
+- This allows platforms to use **any authentication strategy**
+
+---
+
+## Logout & Token Revocation
+
+Logout is implemented as **JWT revocation**, not session destruction.
+
+### Flow
+1. Client calls `POST /logout` with a Bearer token
+2. Authflow-Go:
+   - Validates the JWT
+   - Extracts the `jti` claim
+   - Writes `revoked:<jti>` to Redis
+3. Redis entry expires automatically when the JWT would expire
+
+### Why Redis?
+-  Immediate logout
+-  Stateless JWT validation
+-  Automatic cleanup via TTL
+-  No persistent blacklist storage
+
+### Redis Revocation Model
+```
+revoked:<jti> → "1" (TTL = token_expiry − now)
+```
+
+Any request using a revoked token is rejected by middleware, even if the JWT is otherwise valid.
 
 ---
 
@@ -49,21 +123,20 @@ Authflow-Go functions as:
 
 Tokens issued by Authflow-Go contain:
 
-- `email` – authenticated user identifier
-- `sub` – subject (user)
-- `iss` – issuer (`authflow-go`)
-- `iat` – issued at
-- `exp` – expiration time (24 hours)
+| Claim      | Description                          |
+|------------|--------------------------------------|
+| `sub`      | Subject (user identifier)            |
+| `iss`      | Issuer (`authflow-go`)               |
+| `jti`      | Unique token ID                      |
+| `iat`      | Issued at                            |
+| `exp`      | Expiration time                      |
+| `provider` | Authentication source (e.g., `google`, `local`) |
 
 ---
-## OAuth Flow Verification
 
-> OAuth callback validation relies on provider-issued authorization
-> codes and session cookies established during browser-based authentication.
-> As such, callback verification is demonstrated via browser network traces
-> rather than Postman.
+## Authentication & Authorization Flow
+<p align="center"> <img src="result/flowchartv1.svg" alt="Authflow-Go Architecture Flowchart" width="900"/> </p> <p align="center"> <em> End-to-end flow showing OAuth authentication, centralized JWT issuance, Redis-backed token revocation, and protected resource access. </em> </p>
 
----
 
 ### 1️⃣ OAuth Initiation (Postman)
 
@@ -127,16 +200,48 @@ Tokens issued by Authflow-Go contain:
 </p>
 
 ---
+### 5️⃣ Token Revocation & Logout (Redis)
+<p align="center"> <img src="result/redis.png" alt="JWT Revocation via Redis" width="800"/> </p> <p align="center"> <em> When a client initiates logout, AuthFlow validates the JWT, extracts the token’s <code>jti</code> claim, and stores it in Redis as a revocation entry with a TTL equal to the remaining token lifetime. Any subsequent request using this JWT is rejected, even if the token has not yet expired. </em> </p>
 
-## Authentication Architecture
+### OAuth Authentication Flow
+1. User initiates OAuth login
+2. OAuth provider authenticates the user
+3. Authflow-Go validates the callback and establishes a session
+4. Authflow-Go issues an internal application JWT
+5. Client uses the JWT for API access
 
-<p align="center">
-  <img src="result/oauth-flowchart.svg" alt="AuthFlow OAuth Architecture" width="900"/>
-</p>
 
-<p align="center">
-  <em>
-    High-level authentication flow illustrating OAuth-based identity
-    verification and application-level JWT issuance.
-  </em>
-</p>
+
+### Protected Resource Access
+1. Client sends `Authorization: Bearer <JWT>`
+2. Middleware:
+   - Verifies signature & expiry
+   - Checks Redis for `revoked:<jti>`
+3. Request proceeds only if the token is **valid and not revoked**
+
+---
+
+## Security Model Summary
+
+✅ Single JWT issuer (Authflow-Go)  
+✅ Stateless authorization using JWTs  
+✅ Immediate logout via Redis  
+✅ OAuth sessions cleared as best-effort cleanup  
+✅ Downstream services never mint tokens
+
+---
+
+
+## Why This Architecture
+
+This design mirrors real-world systems where:
+
+- Authentication strategies vary per platform
+- Authorization is centralized
+- Token lifecycle is controlled in one place
+- Logout is enforceable across services
+
+
+---
+
+
