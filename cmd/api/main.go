@@ -34,10 +34,17 @@ func main() {
 	)
 	rdb := redisclient.New()
 
-	err := rdb.Set(redisclient.Ctx, "session:user:123", "logged_in", time.Minute*10).Err()
+	err := rdb.Set(redisclient.Ctx, "redis:test", "it_works", 5*time.Minute).Err()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("Redis SET failed:", err)
 	}
+
+	val, err := rdb.Get(redisclient.Ctx, "redis:test").Result()
+	if err != nil {
+		log.Fatal("Redis GET failed:", err)
+	}
+
+	log.Println("Redis test value:", val)
 
 	srv := server.NewServer(rdb)
 	handler := srv.RegisterRoutes()
