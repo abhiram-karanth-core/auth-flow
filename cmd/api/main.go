@@ -2,15 +2,18 @@ package main
 
 import (
 	"authflow/internal/auth"
+	redisclient "authflow/internal/redis"
 	"log"
 	"net/http"
 	"os"
+	"time"
+
+	"authflow/internal/server"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/markbates/goth"
 	"github.com/markbates/goth/gothic"
 	"github.com/markbates/goth/providers/google"
-	"authflow/internal/server"
 )
 
 func main() {
@@ -29,7 +32,14 @@ func main() {
 			"https://authflow-go.onrender.com/auth/google/callback",
 		),
 	)
-	srv := server.NewServer() 
+	rdb := redisclient.New()
+
+	err := rdb.Set(redisclient.Ctx, "session:user:123", "logged_in", time.Minute*10).Err()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	srv := server.NewServer(rdb)
 	handler := srv.RegisterRoutes()
 	port := os.Getenv("PORT")
 	if port == "" {

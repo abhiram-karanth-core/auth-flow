@@ -1,13 +1,19 @@
 package server
 
-import "authflow/internal/database"
+import (
+	"authflow/internal/database"
+
+	"github.com/redis/go-redis/v9"
+)
 
 type Server struct {
-	db database.Service
+	db  database.Service
+	rdb *redis.Client
 }
 
-func NewServer() *Server {
+func NewServer(rdb *redis.Client) *Server {
 	return &Server{
-		db: database.New(),
+		db:  database.New(),
+		rdb: rdb,
 	}
 }

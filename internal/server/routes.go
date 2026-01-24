@@ -7,15 +7,18 @@ import (
 
 	"authflow/internal/auth"
 
+	authmw "authflow/internal/middleware"
+
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
+	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/markbates/goth/gothic"
 )
 
 func (s *Server) RegisterRoutes() http.Handler {
 	r := chi.NewRouter()
-	r.Use(middleware.Logger)
+	r.Use(chimw.Logger)
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"https://*", "http://*"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
@@ -26,6 +29,13 @@ func (s *Server) RegisterRoutes() http.Handler {
 	r.Get("/auth/{provider}", s.beginAuth)
 	r.Get("/auth/{provider}/callback", s.authCallback)
 	r.Get("/logout/{provider}", s.logout)
+	// protected routes
+	r.Group(func(pr chi.Router) {
+		pr.Use(authmw.JWTAuth(s.rdb)) // 👈 HERE
+
+		pr.Post("/logout", s.logout)
+
+	})
 	return r
 }
 func (s *Server) beginAuth(w http.ResponseWriter, r *http.Request) {
@@ -39,30 +49,59 @@ func (s *Server) beginAuth(w http.ResponseWriter, r *http.Request) {
 	gothic.BeginAuthHandler(w, r)
 }
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
+	tokenStr := extractBearerToken(r)
+	if tokenStr == "" {
+		http.Error(w, "missing token", http.StatusUnauthorized)
+		return
+	}
+
+	token, err := jwt.ParseWithClaims(
+		tokenStr,
+		&auth.Claims{},
+		func(t *jwt.Token) (interface{}, error) {
+			return []byte(os.Getenv("JWT_SECRET")), nil
+		},
+	)
+	if err != nil || !token.Valid {
+		http.Error(w, "invalid token", http.StatusUnauthorized)
+		return
+	}
+
+	claims := token.Claims.(*auth.Claims)
+
+	//revoke JWT
+	if err := auth.RevokeToken(s.rdb, claims); err != nil {
+		http.Error(w, "logout failed", http.StatusInternalServerError)
+		return
+	}
+
+	//  clear OAuth session if browser-based
 	_ = gothic.Logout(w, r)
-	http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("logged out"))
 }
 
 func (s *Server) authCallback(w http.ResponseWriter, r *http.Request) {
-    user, err := gothic.CompleteUserAuth(w, r)
-    if err != nil {
-        http.Error(w, err.Error(), http.StatusUnauthorized)
-        return
-    }
+	user, err := gothic.CompleteUserAuth(w, r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
 
-    token, err := auth.GenerateJWT(user.Email, user.UserID)
-    if err != nil {
-        http.Error(w, "Token generation failed", http.StatusInternalServerError)
-        return
-    }
+	token, err := auth.GenerateJWT(user.Email, user.UserID)
+	if err != nil {
+		http.Error(w, "Token generation failed", http.StatusInternalServerError)
+		return
+	}
 
-    frontendURL := os.Getenv("FRONTEND_URL")
+	frontendURL := os.Getenv("FRONTEND_URL")
 
-    redirectURL := fmt.Sprintf(
-        "%s/oauth/callback?token=%s",
-        frontendURL,
-        token,
-    )
+	redirectURL := fmt.Sprintf(
+		"%s/oauth/callback?token=%s",
+		frontendURL,
+		token,
+	)
 
-    http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
+	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 }
