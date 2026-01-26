@@ -1,6 +1,7 @@
 package server
 
 import (
+	"authflow/internal/auth"
 	"authflow/internal/database"
 
 	"github.com/gorilla/sessions"
@@ -15,7 +16,8 @@ type Server struct {
 
 func NewServer(rdb *redis.Client) *Server {
 	return &Server{
-		db:  database.New(),
-		rdb: rdb,
+		db:    database.New(),
+		rdb:   rdb,
+		store: auth.NewAuth(),
 	}
 }
