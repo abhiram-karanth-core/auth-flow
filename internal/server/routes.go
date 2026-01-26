@@ -32,24 +32,62 @@ func (s *Server) RegisterRoutes() http.Handler {
 	r.Post("/logout/{provider}", s.logout)
 	// protected routes
 	r.Group(func(pr chi.Router) {
-		pr.Use(authmw.JWTAuth(s.rdb)) 
+		pr.Use(authmw.JWTAuth(s.rdb))
 
 		pr.Post("/logout", s.logout)
 
 	})
-	r.Post("/mint",s.Mint)
+	r.Post("/mint", s.Mint)
 	return r
 }
-func (s *Server) beginAuth(w http.ResponseWriter, r *http.Request) {
-	// Try to complete auth (user already logged in)
-	if _, err := gothic.CompleteUserAuth(w, r); err == nil {
-		w.Write([]byte("Already authenticated"))
-		return
+func extractOAuthParams(r *http.Request) (string, string, error) {
+	clientID := r.URL.Query().Get("client_id")
+	redirectURI := r.URL.Query().Get("redirect_uri")
+
+	if clientID == "" || redirectURI == "" {
+		return "", "", fmt.Errorf("missing client_id or redirect_uri")
+	}
+	return clientID, redirectURI, nil
+}
+func (s *Server) isAllowedRedirect(clientID, redirectURI string) bool {
+	allowed := map[string][]string{
+		"ragworks": {
+			"https://ragworks-wheat.vercel.app/oauth/callback",
+			"http://localhost:3000/oauth/callback",
+		},
 	}
 
-	// Start OAuth flow
+	uris, ok := allowed[clientID]
+	if !ok {
+		return false
+	}
+
+	for _, uri := range uris {
+		if uri == redirectURI {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Server) beginAuth(w http.ResponseWriter, r *http.Request) {
+	clientID, redirectURI, err := extractOAuthParams(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if !s.isAllowedRedirect(clientID, redirectURI) {
+		http.Error(w, "invalid redirect_uri", http.StatusBadRequest)
+		return
+	}
+	session, _ := s.store.Get(r, "authflow")
+	session.Values["client_id"] = clientID
+	session.Values["redirect_uri"] = redirectURI
+	session.Save(r, w)
+
 	gothic.BeginAuthHandler(w, r)
 }
+
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	tokenStr := extractBearerToken(r)
 	if tokenStr == "" {
@@ -97,13 +135,13 @@ func (s *Server) authCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	frontendURL := os.Getenv("FRONTEND_URL")
-
-	redirectURL := fmt.Sprintf(
-		"%s/oauth/callback?token=%s",
-		frontendURL,
-		token,
-	)
+	session, _ := s.store.Get(r, "authflow")
+	redirectURI, ok := session.Values["redirect_uri"].(string)
+	if !ok {
+		http.Error(w, "redirect uri missing", http.StatusBadRequest)
+		return
+	}
+	redirectURL := fmt.Sprintf("%s?token=%s",redirectURI,token)
 
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 }
@@ -139,5 +177,3 @@ func (s *Server) Mint(w http.ResponseWriter, r *http.Request) {
 		"access_token": token,
 	})
 }
-
-

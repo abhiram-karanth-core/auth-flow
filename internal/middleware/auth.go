@@ -36,7 +36,7 @@ func JWTAuth(rdb *redis.Client) func(http.Handler) http.Handler {
 
 			claims := token.Claims.(*auth.Claims)
 
-			// 🔐 Redis revocation check
+			// Redis revocation check
 			exists, err := rdb.Exists(
 				redisclient.Ctx,
 				"revoked:"+claims.ID,
@@ -47,7 +47,7 @@ func JWTAuth(rdb *redis.Client) func(http.Handler) http.Handler {
 				return
 			}
 
-			// (optional) attach claims to context
+			// attach claims to context
 			ctx := context.WithValue(r.Context(), "claims", claims)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
