@@ -17,7 +17,7 @@ type Claims struct {
 func GenerateJWT(email, providerUserID string) (string, error) {
 	secret := os.Getenv("JWT_SECRET")
 	if secret == "" {
-		secret = "dev-secret-change-me"
+		panic("JWT_SECRET not set")
 	}
 	// now := time.Now()
 	jti := uuid.NewString()
