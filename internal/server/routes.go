@@ -166,7 +166,7 @@ func (s *Server) Mint(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := auth.GenerateJWT(req.Sub, req.Provider)
+	token, err := auth.GenerateJWT(req.Sub, req.Sub)
 	if err != nil {
 		http.Error(w, "token generation failed", http.StatusInternalServerError)
 		return
