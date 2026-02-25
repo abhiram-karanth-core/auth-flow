@@ -5,6 +5,7 @@ It issues application-level JWTs, integrates with OAuth providers for identity v
 
 The service is designed to be used by platforms that manage how users authenticate (OAuth, username/password, SSO, etc.) while delegating authorization, token lifecycle, and revocation to a single trusted service.
 
+It is designed to be modular and easily pluggable into any web application.
 ---
 
 ## What This Project Is
@@ -245,3 +246,15 @@ This design mirrors real-world systems where:
 ---
 
 
+##  Live Integration
+AuthFlow is currently running in production as the authentication layer for:
+
+👉 https://rag-works.vercel.app
+
+You can test the authentication flow by:
+
+- Creating an account
+- Logging in
+- Accessing protected routes
+
+All auth operations are powered by AuthFlow.
