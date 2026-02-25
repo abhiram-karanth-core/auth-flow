@@ -249,12 +249,13 @@ This design mirrors real-world systems where:
 ##  Live Integration
 AuthFlow is currently running in production as the authentication layer for:
 
-👉 https://rag-works.vercel.app
+👉 httpsd://rag-works.vercel.app
 
 You can test the authentication flow by:
 
 - Creating an account
 - Logging in
 - Accessing protected routes
+- Logging out
 
 All auth operations are powered by AuthFlow.
