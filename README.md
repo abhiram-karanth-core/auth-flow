@@ -249,7 +249,7 @@ This design mirrors real-world systems where:
 ##  Live Integration
 AuthFlow is currently running in production as the authentication layer for:
 
-👉 httpsd://rag-works.vercel.app
+👉 https://rag-works.vercel.app
 
 You can test the authentication flow by:
 
