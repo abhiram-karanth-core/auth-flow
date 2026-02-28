@@ -262,9 +262,9 @@ export default function DocsPage() {
                 <ContentCard style={{ marginBottom: 0 }}>
                     <div className="flex flex-col md:flex-row justify-between items-center font-mono text-xs text-gray-500">
                         <div>
-                            © 2024 AUTHFLOW OPEN SOURCE
-                            <br />
-                            MIT LICENSE
+                            © 2026 AUTHFLOW OPEN SOURCE
+                           
+                            
                         </div>
                         <div className="flex gap-4 mt-4 md:mt-0">
                             <a
@@ -275,18 +275,7 @@ export default function DocsPage() {
                             >
                                 GITHUB
                             </a>
-                            <Link
-                                href="#"
-                                className="hover:text-black hover:underline"
-                            >
-                                TWITTER
-                            </Link>
-                            <Link
-                                href="#"
-                                className="hover:text-black hover:underline"
-                            >
-                                DISCORD
-                            </Link>
+                            
                         </div>
                         <div className="mt-4 md:mt-0">
                             MAINTAINED BY @ABHIRAM-KARANTH
