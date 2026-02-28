@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 
-const CELL_SIZE = 20;
+const BASE_CELL_SIZE = 20;
 
 const pixelFont: Record<string, number[][]> = {
     A: [
@@ -84,6 +84,30 @@ if (typeof document !== "undefined") {
     }
 }
 
+/**
+ * Determine the best text and cell size to fit the container width.
+ * Tries "AUTHFLOW" first, then shorter fallbacks, scaling cell size down if needed.
+ */
+function pickTextAndCellSize(containerWidth: number): { text: string; cellSize: number } {
+    const candidates = ["AUTHFLOW", "AUTH", "AF"];
+    const letterWidth = 5;
+    const letterSpacing = 2;
+    const minPadding = 4; // at least 2 cells padding on each side
+
+    for (const text of candidates) {
+        const textWidthCells = text.length * letterWidth + (text.length - 1) * letterSpacing + minPadding;
+        // Try the base cell size first, then scale down
+        for (let cellSize = BASE_CELL_SIZE; cellSize >= 8; cellSize -= 2) {
+            if (textWidthCells * cellSize <= containerWidth) {
+                return { text, cellSize };
+            }
+        }
+    }
+
+    // Ultimate fallback — single "A" at smallest size
+    return { text: "A", cellSize: 8 };
+}
+
 export default function HeroBanner() {
     const heroRef = useRef<HTMLDivElement>(null);
 
@@ -94,19 +118,25 @@ export default function HeroBanner() {
 
             const containerWidth = container.clientWidth;
             const containerHeight = container.clientHeight;
-            const cols = Math.floor(containerWidth / CELL_SIZE);
-            const rows = Math.floor(containerHeight / CELL_SIZE);
+
+            if (containerWidth === 0 || containerHeight === 0) return;
+
+            const { text, cellSize } = pickTextAndCellSize(containerWidth);
+
+            const cols = Math.floor(containerWidth / cellSize);
+            const rows = Math.floor(containerHeight / cellSize);
+
+            if (cols < 3 || rows < 5) return;
 
             container.style.display = "grid";
-            container.style.gridTemplateColumns = `repeat(${cols}, ${CELL_SIZE}px)`;
-            container.style.gridTemplateRows = `repeat(${rows}, ${CELL_SIZE}px)`;
+            container.style.gridTemplateColumns = `repeat(${cols}, ${cellSize}px)`;
+            container.style.gridTemplateRows = `repeat(${rows}, ${cellSize}px)`;
             container.innerHTML = "";
 
             const grid = Array(rows)
                 .fill(null)
                 .map(() => Array(cols).fill(0));
 
-            const text = "AUTHFLOW";
             const letterWidth = 5;
             const letterSpacing = 2;
             const textWidth =
@@ -115,14 +145,18 @@ export default function HeroBanner() {
             const startX = Math.floor((cols - textWidth) / 2);
             const startY = Math.floor((rows - 5) / 2);
 
-            if (startX > 0 && startY > 0) {
+            if (startX >= 0 && startY >= 0) {
                 let currentX = startX;
                 for (const char of text) {
                     const matrix = pixelFont[char];
                     if (matrix) {
                         for (let r = 0; r < 5; r++) {
                             for (let c = 0; c < 5; c++) {
-                                if (matrix[r][c] === 1) {
+                                if (
+                                    matrix[r][c] === 1 &&
+                                    startY + r < rows &&
+                                    currentX + c < cols
+                                ) {
                                     grid[startY + r][currentX + c] = 1;
                                 }
                             }
@@ -132,26 +166,20 @@ export default function HeroBanner() {
                 }
             }
 
-            // Track column index of text pixels for staggered delay
-            let textPixelIndex = 0;
-
             for (let r = 0; r < rows; r++) {
                 for (let c = 0; c < cols; c++) {
                     const px = document.createElement("div");
                     if (grid[r][c] === 1) {
                         px.className = "px-fill";
-                        // Stagger based on column position relative to text start
                         const colOffset = c - startX;
                         const delay = colOffset * 15 + Math.random() * 40;
                         px.style.opacity = "0";
                         px.style.transform = "scale(0)";
                         px.style.animation = `pxReveal 0.4s ease-out ${delay}ms forwards`;
-                        textPixelIndex++;
                     } else {
                         if (Math.random() > 0.97) {
                             px.className = "px-empty";
                             px.style.opacity = "0";
-                            // Scatter pixels appear after text finishes
                             const scatterDelay = 800 + Math.random() * 600;
                             px.style.animation = `pxFadeIn 0.6s ease-out ${scatterDelay}ms forwards`;
                         }

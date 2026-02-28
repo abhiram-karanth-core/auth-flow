@@ -422,6 +422,7 @@ p {
 }
 
 @media (max-width: 1024px) {
+
   .grid-2,
   .grid-3,
   .grid-4 {
@@ -430,6 +431,51 @@ p {
 
   h1 {
     font-size: 36px;
+  }
+
+  .hero-banner {
+    height: calc(var(--cell-size) * 12);
+  }
+
+  .main-stage {
+    margin-left: 0;
+    width: 100%;
+    padding: 10px;
+    padding-top: 50px;
+  }
+
+  .ruler-x,
+  .ruler-y,
+  .corner-piece,
+  .grid-layer,
+  .active-cell-indicator,
+  .coordinates-display {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .hero-banner {
+    height: calc(var(--cell-size) * 10);
+  }
+
+  h1 {
+    font-size: 28px;
+    letter-spacing: -1px;
+  }
+
+  h2 {
+    font-size: 22px;
+  }
+
+  .content-card {
+    padding: var(--cell-size);
+  }
+
+  .spreadsheet-table th,
+  .spreadsheet-table td {
+    padding: 8px;
+    font-size: 11px;
   }
 }
 
