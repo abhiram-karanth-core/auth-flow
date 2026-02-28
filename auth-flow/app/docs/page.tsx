@@ -256,6 +256,10 @@ export default function DocsPage() {
                         <li>Access protected routes</li>
                         <li>Log out (token revoked via Redis)</li>
                     </ul>
+                    <p className="font-mono text-sm text-gray-600">
+                        All auth operations in rag-works are powered by AuthFlow.
+                    </p>
+                    
                 </ContentCard>
 
                 {/* Footer */}
