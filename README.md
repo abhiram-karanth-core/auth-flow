@@ -253,7 +253,7 @@ AuthFlow is currently running in production as the authentication layer for:
 
 You can test the authentication flow by:
 
-- Creating an account
+- Creating an account(via Google or username + password)
 - Logging in
 - Accessing protected routes
 - Logging out
