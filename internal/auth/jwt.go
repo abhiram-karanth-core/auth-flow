@@ -19,7 +19,7 @@ func GenerateJWT(email, providerUserID string) (string, error) {
 	if secret == "" {
 		panic("JWT_SECRET not set")
 	}
-	// now := time.Now()
+
 	jti := uuid.NewString()
 	claims := Claims{
 		Email:    email,
@@ -33,6 +33,7 @@ func GenerateJWT(email, providerUserID string) (string, error) {
 		},
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(secret))
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	token.Header["kid"] = getKeyID() // downstream uses kid to pick the right key from JWKS
+	return token.SignedString(getPrivateKey())
 }
