@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 
 	"authflow/internal/auth"
 
@@ -27,6 +26,7 @@ func (s *Server) RegisterRoutes() http.Handler {
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))
+	r.Get("/.well-known/jwks.json", auth.JWKSHandler)
 	r.Get("/auth/{provider}", s.beginAuth)
 	r.Get("/auth/{provider}/callback", s.authCallback)
 	r.Post("/logout/{provider}", s.logout)
@@ -99,14 +99,16 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 		tokenStr,
 		&auth.Claims{},
 		func(t *jwt.Token) (interface{}, error) {
-			return []byte(os.Getenv("JWT_SECRET")), nil
+			if _, ok := t.Method.(*jwt.SigningMethodRSA); !ok {
+				return nil, fmt.Errorf("unexpected alg: %v", t.Header["alg"])
+			}
+			return auth.GetPublicKey(), nil // derive from private key
 		},
 	)
-	if err != nil || !token.Valid {
+	if err != nil || !token.Valid { 
 		http.Error(w, "invalid token", http.StatusUnauthorized)
 		return
 	}
-
 	claims := token.Claims.(*auth.Claims)
 
 	//revoke JWT
@@ -141,7 +143,7 @@ func (s *Server) authCallback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "redirect uri missing", http.StatusBadRequest)
 		return
 	}
-	redirectURL := fmt.Sprintf("%s?token=%s",redirectURI,token)
+	redirectURL := fmt.Sprintf("%s?token=%s", redirectURI, token)
 
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 }
