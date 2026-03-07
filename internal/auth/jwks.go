@@ -36,30 +36,37 @@ var (
 
 func loadPrivateKey() {
 	privateKeyOnce.Do(func() {
-		path := os.Getenv("JWT_PRIVATE_KEY_PATH")
-		if path == "" {
-			panic("JWT_PRIVATE_KEY_PATH not set")
+		var keyBytes []byte
+
+		if b64 := os.Getenv("JWT_PRIVATE_KEY_B64"); b64 != "" {
+			// production — key passed as base64 env var
+			var err error
+			keyBytes, err = base64.StdEncoding.DecodeString(b64)
+			if err != nil {
+				panic("failed to decode JWT_PRIVATE_KEY_B64: " + err.Error())
+			}
+		} else if path := os.Getenv("JWT_PRIVATE_KEY_PATH"); path != "" {
+			// local dev — key loaded from file
+			var err error
+			keyBytes, err = os.ReadFile(path)
+			if err != nil {
+				panic("failed to read private key: " + err.Error())
+			}
+		} else {
+			panic("no private key configured: set JWT_PRIVATE_KEY_B64 or JWT_PRIVATE_KEY_PATH")
 		}
-		keyBytes, err := os.ReadFile(path)
-		if err != nil {
-			panic("failed to read private key: " + err.Error())
-		}
+
 		key, err := jwt.ParseRSAPrivateKeyFromPEM(keyBytes)
 		if err != nil {
 			panic("failed to parse private key: " + err.Error())
 		}
 		privateKey = key
-
-		// kid can be set explicitly via env or auto-generated.
-		// Explicit kid is useful when rotating — downstream can
-		// cache both old and new keys during transition.
 		keyID = os.Getenv("JWT_KEY_ID")
 		if keyID == "" {
 			keyID = uuid.NewString()
 		}
 	})
 }
-
 
 func GetPublicKey() *rsa.PublicKey {
 	return getPrivateKey().Public().(*rsa.PublicKey)
