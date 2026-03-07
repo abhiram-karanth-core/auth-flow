@@ -60,6 +60,10 @@ func loadPrivateKey() {
 	})
 }
 
+
+func GetPublicKey() *rsa.PublicKey {
+	return getPrivateKey().Public().(*rsa.PublicKey)
+}
 func getPrivateKey() *rsa.PrivateKey {
 	loadPrivateKey()
 	return privateKey
@@ -87,4 +91,4 @@ func JWKSHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "public, max-age=3600") // downstream can cache for max 1hr
 	json.NewEncoder(w).Encode(JWKSet{Keys: []JWK{jwk}})
-}			
+}
