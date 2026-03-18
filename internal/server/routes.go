@@ -52,7 +52,7 @@ func extractOAuthParams(r *http.Request) (string, string, error) {
 func (s *Server) isAllowedRedirect(clientID, redirectURI string) bool {
 	allowed := map[string][]string{
 		"ragworks": {
-			"https://ragworks-wheat.vercel.app/oauth/callback",
+			"https://rag-works.vercel.app/oauth/callback",
 			"http://localhost:3000/oauth/callback",
 		},
 	}
