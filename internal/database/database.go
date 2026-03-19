@@ -15,7 +15,7 @@ func NewClient() *ent.Client {
 	if dsn == "" {
 		log.Fatal("DATABASE_URL is not set")
 	}
-	client, err := ent.Open("pgx", dsn)
+	client, err := ent.Open("postgres", dsn)
 	if err != nil {
 		log.Fatalf("failed connecting to postgres: %v", err)
 	}
