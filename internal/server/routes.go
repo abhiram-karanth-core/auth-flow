@@ -13,7 +13,9 @@ import (
 	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"github.com/markbates/goth/gothic"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func (s *Server) RegisterRoutes() http.Handler {
@@ -38,6 +40,7 @@ func (s *Server) RegisterRoutes() http.Handler {
 
 	})
 	r.Post("/mint", s.Mint)
+	r.Post("/clients", s.RegisterClients)
 	return r
 }
 func extractOAuthParams(r *http.Request) (string, string, error) {
@@ -49,26 +52,6 @@ func extractOAuthParams(r *http.Request) (string, string, error) {
 	}
 	return clientID, redirectURI, nil
 }
-func (s *Server) isAllowedRedirect(clientID, redirectURI string) bool {
-	allowed := map[string][]string{
-		"ragworks": {
-			"https://rag-works.vercel.app/oauth/callback",
-			"http://localhost:3000/oauth/callback",
-		},
-	}
-
-	uris, ok := allowed[clientID]
-	if !ok {
-		return false
-	}
-
-	for _, uri := range uris {
-		if uri == redirectURI {
-			return true
-		}
-	}
-	return false
-}
 
 func (s *Server) beginAuth(w http.ResponseWriter, r *http.Request) {
 	clientID, redirectURI, err := extractOAuthParams(r)
@@ -76,8 +59,9 @@ func (s *Server) beginAuth(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if !s.isAllowedRedirect(clientID, redirectURI) {
-		http.Error(w, "invalid redirect_uri", http.StatusBadRequest)
+	client, err := s.db.OAuthClient.Get(r.Context(), clientID)
+	if err != nil || client.RedirectURI != redirectURI {
+		http.Error(w, "invalid client_id or redirect_uri", http.StatusBadRequest)
 		return
 	}
 	session, _ := s.store.Get(r, "authflow")
@@ -105,7 +89,7 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 			return auth.GetPublicKey(), nil // derive from private key
 		},
 	)
-	if err != nil || !token.Valid { 
+	if err != nil || !token.Valid {
 		http.Error(w, "invalid token", http.StatusUnauthorized)
 		return
 	}
@@ -177,5 +161,40 @@ func (s *Server) Mint(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
 		"access_token": token,
+	})
+}
+
+func (s *Server) RegisterClients(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Name        string `json:"name"`
+		RedirectUri string `json:"redirect_uri"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "invalid body", http.StatusBadRequest)
+		return
+	}
+	clientID := uuid.NewString()
+	secret := uuid.NewString()
+	hashed, err := bcrypt.GenerateFromPassword([]byte(secret), bcrypt.DefaultCost)
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+	_, err = s.db.OAuthClient.Create().
+		SetID(clientID).
+		SetName(body.Name).
+		SetSecret(string(hashed)).
+		SetRedirectURI(body.RedirectUri).
+		Save(r.Context())
+	if err != nil {
+		http.Error(w, "failed to register client", http.StatusInternalServerError)
+		return
+	}
+
+	// return raw secret only once — not stored in plaintext
+	json.NewEncoder(w).Encode(map[string]string{
+		"client_id":     clientID,
+		"client_secret": secret,
+		"redirect_uri":  body.RedirectUri,
 	})
 }
