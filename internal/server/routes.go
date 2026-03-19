@@ -133,26 +133,41 @@ func (s *Server) authCallback(w http.ResponseWriter, r *http.Request) {
 }
 
 type MintRequest struct {
-	Sub      string                 `json:"sub"`
-	Provider string                 `json:"provider"`
-	Email    string                 `json:"email,omitempty"`
-	Claims   map[string]interface{} `json:"claims,omitempty"`
+    ClientID     string                 `json:"client_id"`
+    ClientSecret string                 `json:"client_secret"`
+    Sub          string                 `json:"sub"`
+    Provider     string                 `json:"provider"`
+    Email        string                 `json:"email,omitempty"`
+    Claims       map[string]interface{} `json:"claims,omitempty"`
 }
 
 func (s *Server) Mint(w http.ResponseWriter, r *http.Request) {
-	var req MintRequest
+    var req MintRequest
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        http.Error(w, "invalid request", http.StatusBadRequest)
+        return
+    }
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request", http.StatusBadRequest)
-		return
-	}
+    if req.Sub == "" || req.ClientID == "" || req.ClientSecret == "" {
+        http.Error(w, "missing required fields", http.StatusBadRequest)
+        return
+    }
 
-	if req.Sub == "" {
-		http.Error(w, "missing sub", http.StatusBadRequest)
-		return
-	}
+    // Look up the registered client
+    client, err := s.db.OAuthClient.Get(r.Context(), req.ClientID)
+    if err != nil {
+        http.Error(w, "invalid client", http.StatusUnauthorized)
+        return
+    }
 
-	token, err := auth.GenerateJWT(req.Sub, req.Sub)
+    // Verify the secret against the bcrypt hash you already store
+    if err := bcrypt.CompareHashAndPassword([]byte(client.Secret), []byte(req.ClientSecret)); err != nil {
+        http.Error(w, "invalid client credentials", http.StatusUnauthorized)
+        return
+    }
+
+    token, err := auth.GenerateJWT(req.Sub, req.Sub)
+
 	if err != nil {
 		http.Error(w, "token generation failed", http.StatusInternalServerError)
 		return
