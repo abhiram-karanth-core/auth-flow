@@ -1,45 +1,89 @@
 # Authflow
 
-Authflow is a centralized authorization service written in Go. It issues application-level JWTs, integrates with OAuth providers for identity verification, and enforces secure logout using Redis-backed token revocation.
+Authflow is an API-first identity and token service written in Go. It issues application-level JWTs, supports OAuth-based identity verification, and enforces secure logout using Redis-backed token revocation.
 
-The service is designed to be used by platforms that manage how users authenticate (OAuth, username/password, SSO, etc.) while delegating authorization, token lifecycle, and revocation to a single trusted service.
+Authflow is designed for platforms that want a single JWT issuer for all downstream services, while keeping authentication methods flexible. Applications can integrate with Authflow using standard HTTP redirects and API calls — no client SDK is required.
 
 ---
 
-## What This Project Is
+## What Authflow Is
 
-Authflow functions as:
+Authflow acts as a centralized trust layer for modern applications and microservices.
 
-**Authorization Service (Primary Role)**
+**Authorization Service — Primary Role**
 - Issues signed JWT access tokens (RS256)
 - Enforces token revocation using Redis
 - Acts as the single JWT authority for the system
 - Exposes a JWKS endpoint for downstream verification
 
-**Authentication Integrator (Secondary Role)**
-- Supports OAuth 2.0 login (Google via Goth) for identity verification
-- Establishes secure browser sessions during OAuth flows
+**Authentication Integrator — Secondary Role**
+- Supports OAuth 2.0 login for identity verification
+- Accepts upstream-authenticated identity via `/mint`
+- Keeps authentication method decoupled from token authority
 
-### Key Design Principle
+### Design Goals
 
-Authentication and authorization are intentionally decoupled.
+- Single JWT authority across the system
+- Provider-agnostic authentication inputs — OAuth, local login, or SSO
+- Stateless downstream verification using JWKS
+- Immediate logout semantics using Redis-backed revocation
+- SDK-less integration through standard HTTP endpoints
 
-- Platforms decide how users authenticate
-- Authflow-Go decides how access is granted and revoked
+---
 
-This enables a single JWT issuer, consistent logout semantics, stateless downstream services, and centralized security guarantees.
+## Why Authflow
+
+Most authentication products focus primarily on login UI, sessions, and frontend SDKs.
+
+Authflow is centered on a different responsibility:
+
+> No matter how a user authenticates, Authflow becomes the single service responsible for issuing, validating, and revoking application JWTs.
+
+This gives downstream services a stable and simple trust model:
+
+- Trust one issuer
+- Verify signatures locally
+- Check revocation centrally
+- Stay independent of the original login method
+
+---
+
+## Key Architecture Principle
+
+Authentication and token authority are intentionally separated.
+
+- Platforms decide how users authenticate — OAuth, username/password, SSO, or another trusted method
+- Authflow decides how access is granted and revoked
+
+This lets applications evolve their login methods without changing downstream authorization logic.
 
 ---
 
 ## Features
 
 - Centralized JWT issuance (`/mint`)
-- RS256 signing with public key distribution via JWKS (`/.well-known/jwks.json`)
-- OAuth 2.0 authentication (Google via Goth)
-- Redis-backed JWT revocation (secure logout)
-- Stateless JWT validation middleware
-- Provider-agnostic token design
-- Microservice-friendly architecture
+- RS256 signing with public key distribution via JWKS
+- OAuth 2.0 login support
+- Redis-backed JWT revocation
+- Stateless JWT verification for downstream services
+- Multi-client registration with redirect URI validation
+- API-first, SDK-less integration model
+- Microservice-friendly design
+
+---
+
+## SDK-less Integration Model
+
+Authflow does not require platform-specific SDKs.
+
+Applications integrate directly with Authflow using:
+
+- Browser redirects for OAuth flows
+- HTTP API calls for token issuance and logout
+- Bearer tokens for authenticated requests
+- JWKS for downstream JWT verification
+
+This makes Authflow usable from React, MERN, Django, Spring Boot, FastAPI, mobile apps, and other HTTP-capable clients without framework lock-in.
 
 ---
 
@@ -57,9 +101,42 @@ GET  /.well-known/jwks.json
 
 ---
 
+## Supported Flows
+
+Authflow supports two broad integration patterns.
+
+### 1. OAuth Login Flow
+
+Use Authflow as the OAuth entry point for browser-based login.
+
+**Flow:**
+
+1. Client redirects the user to `GET /auth/{provider}`
+2. The OAuth provider authenticates the user
+3. Authflow validates the callback
+4. Authflow issues an application JWT
+5. Authflow redirects the user to the registered `redirect_uri`
+
+This is useful for browser apps that want Authflow to handle OAuth and return an application token.
+
+### 2. Token Issuance After Upstream Authentication
+
+Use Authflow to mint an application JWT after identity has already been verified by the calling platform.
+
+**Flow:**
+
+1. The client platform authenticates the user using its own method
+2. The platform calls `POST /mint`
+3. Authflow issues an application JWT
+4. Downstream services trust only the Authflow-issued token
+
+This is useful when the platform wants to control the login experience but delegate token authority and revocation to Authflow.
+
+---
+
 ## Token Issuance (`/mint`)
 
-Authflow-Go exposes a token minting endpoint that issues JWTs after authentication has already occurred.
+`POST /mint` issues an Authflow JWT for an already-authenticated user.
 
 **Request**
 ```json
@@ -80,45 +157,47 @@ Content-Type: application/json
 }
 ```
 
-> **Important:** `/mint` does not authenticate users. It assumes the caller has already verified identity. This allows platforms to use any authentication strategy.
+> **Important:** `/mint` is a token issuance endpoint, not an authentication endpoint. It assumes the caller has already verified the user's identity using a trusted flow. This allows platforms to use any authentication strategy while keeping one token authority.
 
 ---
 
 ## JWKS Endpoint
 
-Downstream services verify tokens using the public key served at:
+Downstream services verify Authflow-issued JWTs using the public key served at:
 
 ```
 GET /.well-known/jwks.json
 ```
 
-No secret is shared. Downstream services fetch the public key from this endpoint and verify JWT signatures locally. This is the only configuration a downstream service needs to integrate with Authflow-Go.
-
-See the [Integration Guide](#plugging-into-your-service) below.
+No shared secret is required. Each downstream service fetches the public key from Authflow and verifies JWT signatures locally. This keeps services stateless and avoids calling the auth server on every request.
 
 ---
 
-## Logout & Token Revocation
+## Logout and Token Revocation
 
-Logout is implemented as JWT revocation, not session destruction.
+Authflow implements logout as JWT revocation, not just browser session destruction.
 
-**Flow**
+**Flow:**
+
 1. Client calls `POST /logout` with a Bearer token
-2. Authflow-Go validates the JWT, extracts the `jti` claim, and writes `revoked:<jti>` to Redis
-3. Redis entry expires automatically when the JWT would expire
+2. Authflow validates the JWT
+3. Authflow extracts the `jti` claim
+4. Authflow stores `revoked:<jti>` in Redis
+5. The Redis entry expires automatically when the token would normally expire
 
-**Why Redis?**
+**Why Redis:**
+
 - Immediate logout
 - Stateless JWT validation
 - Automatic cleanup via TTL
 - No persistent blacklist storage
 
-**Revocation model**
+**Revocation model:**
 ```
-revoked:<jti> → "1"  (TTL = token_expiry − now)
+revoked:<jti> -> "1"   (TTL = token_expiry - now)
 ```
 
-Any request using a revoked token is rejected by middleware, even if the JWT is otherwise valid.
+A revoked token is rejected even if its JWT signature and expiry are otherwise valid.
 
 ---
 
@@ -131,35 +210,41 @@ Any request using a revoked token is rejected by middleware, even if the JWT is 
 | `jti` | Unique token ID |
 | `iat` | Issued at |
 | `exp` | Expiration time |
-| `email` | User email (OAuth logins) |
-| `provider` | Authentication source (`google`, `local`) |
+| `email` | User email |
+| `provider` | Authentication source (`google`, `local`, `sso`) |
 
 ---
 
-## Authentication & Authorization Flow
+## Authentication and Authorization Model
 
-### OAuth Flow
+Authflow focuses on token trust, not application-specific permission logic.
 
-1. User initiates OAuth login via `GET /auth/{provider}`
-2. OAuth provider (Google) authenticates the user
-3. Authflow-Go validates the callback, exchanges the authorization code, and establishes a session
-4. Authflow-Go issues an RS256-signed application JWT
-5. Client is redirected to the registered `redirect_uri` with the token
+Authflow answers:
 
-### Protected Resource Access
+- Who issued this token?
+- Is the token valid?
+- Has the token been revoked?
 
-1. Client sends `Authorization: Bearer <JWT>`
-2. Middleware verifies signature using the JWKS public key, checks expiry, and checks Redis for `revoked:<jti>`
-3. Request proceeds only if the token is valid and not revoked
+The client platform still owns business authorization decisions such as:
+
+- Is this user an admin?
+- Can this user upload files?
+- Can this user access tenant A but not tenant B?
+
+This separation keeps application roles and business rules independent from the identity provider.
 
 ---
 
 ## Plugging Into Your Service
 
-Downstream services only need two things: the JWKS URL and the issuer name. No shared secrets.
+Downstream services only need two things:
+
+- The Authflow issuer (`authflow-go`)
+- The Authflow JWKS URL
+
+No shared secret is required.
 
 ### Python — Flask
-
 ```python
 from jwt.algorithms import RSAAlgorithm
 import requests
@@ -170,7 +255,6 @@ app.config['JWT_PUBLIC_KEY'] = RSAAlgorithm.from_jwk(jwks['keys'][0])
 
 jwt = JWTManager(app)  # must come after config
 
-# protect routes
 @app.route('/upload', methods=['POST'])
 @jwt_required()
 def upload():
@@ -178,10 +262,14 @@ def upload():
 ```
 
 ### Python — FastAPI
-
 ```python
 def verify_token(token = Depends(security)):
-    claims = jwt.decode(token.credentials, get_public_key(), algorithms=['RS256'], issuer='authflow-go')
+    claims = jwt.decode(
+        token.credentials,
+        get_public_key(),
+        algorithms=['RS256'],
+        issuer='authflow-go'
+    )
     return claims['sub']
 
 @app.post('/upload')
@@ -190,7 +278,6 @@ def upload(current_user: str = Depends(verify_token)):
 ```
 
 ### Node.js — Express
-
 ```javascript
 const checkJwt = expressjwt({
   secret: jwksRsa.expressJwtSecret({
@@ -207,9 +294,7 @@ app.post('/upload', checkJwt, (req, res) => {
 ```
 
 ### Java — Spring Boot
-
 ```yaml
-# application.yml
 spring:
   security:
     oauth2:
@@ -218,7 +303,6 @@ spring:
           jwk-set-uri: https://authflow-go.onrender.com/.well-known/jwks.json
           issuer-uri: https://authflow-go.onrender.com
 ```
-
 ```java
 @PostMapping("/upload")
 public ResponseEntity upload(@AuthenticationPrincipal Jwt jwt) {
@@ -232,19 +316,33 @@ public ResponseEntity upload(@AuthenticationPrincipal Jwt jwt) {
 
 | Property | Status |
 |----------|--------|
-| Single JWT issuer | ✅ Authflow-Go only |
-| Asymmetric signing (RS256) | ✅ Private key never leaves auth server |
-| Public key distribution | ✅ Via JWKS endpoint |
-| Immediate logout | ✅ Redis revocation |
-| Stateless downstream validation | ✅ No auth server call per request |
-| Downstream services mint tokens | ❌ Never |
+| Single JWT issuer |  Authflow only |
+| Asymmetric signing (RS256) |  Private key never leaves Authflow |
+| Public key distribution |  Via JWKS |
+| Immediate logout |  Redis-backed revocation |
+| Stateless downstream validation |  No auth server call per request |
+| Downstream services mint tokens |  Never |
+| Shared secret across services |  Not required |
+
+---
+
+## Good Fit For
+
+Authflow is a strong fit for:
+
+- Microservice architectures
+- MERN and SPA backends that need one JWT authority
+- Polyglot systems using Node, Python, Java, or Go
+- Platforms that want provider-agnostic authentication inputs
+- Teams that want local JWT verification with central revocation
+- Products that prefer API-first auth over SDK-heavy integration
 
 ---
 
 ## Live Integration
 
-Authflow-Go is running in production as the authentication layer for:
+Authflow is currently used in production as the authentication and token layer for:
 
 **[rag-works.vercel.app](https://rag-works.vercel.app)**
 
-You can test the full flow by creating an account (Google OAuth or username + password), logging in, accessing protected routes, and logging out. All auth operations are powered by Authflow-Go.
+You can test the full flow by creating an account with Google OAuth or username/password, logging in, accessing protected routes, and logging out.
