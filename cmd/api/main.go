@@ -2,6 +2,7 @@ package main
 
 import (
 	"authflow/internal/auth"
+	"authflow/internal/database"
 	redisclient "authflow/internal/redis"
 	"log"
 	"net/http"
@@ -46,7 +47,11 @@ func main() {
 
 	log.Println("Redis test value:", val)
 
-	srv := server.NewServer(rdb)
+	db := database.NewClient()
+	defer db.Close()
+
+
+	srv := server.NewServer(rdb, db)
 	handler := srv.RegisterRoutes()
 	port := os.Getenv("PORT")
 	if port == "" {

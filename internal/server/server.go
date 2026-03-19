@@ -1,22 +1,22 @@
 package server
 
 import (
+	"authflow/ent"
 	"authflow/internal/auth"
-	"authflow/internal/database"
 
 	"github.com/gorilla/sessions"
 	"github.com/redis/go-redis/v9"
 )
 
 type Server struct {
-	db    database.Service
+	db    *ent.Client
 	rdb   *redis.Client
 	store *sessions.CookieStore
 }
 
-func NewServer(rdb *redis.Client) *Server {
+func NewServer(rdb *redis.Client, db *ent.Client) *Server {
 	return &Server{
-		db:    database.New(),
+		db:    db,
 		rdb:   rdb,
 		store: auth.NewAuth(),
 	}

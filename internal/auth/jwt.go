@@ -1,7 +1,7 @@
 package auth
 
 import (
-	"os"
+
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -15,11 +15,7 @@ type Claims struct {
 }
 
 func GenerateJWT(email, providerUserID string) (string, error) {
-	secret := os.Getenv("JWT_SECRET")
-	if secret == "" {
-		panic("JWT_SECRET not set")
-	}
-
+	
 	jti := uuid.NewString()
 	claims := Claims{
 		Email:    email,
